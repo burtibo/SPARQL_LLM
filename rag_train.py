@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 import torch
 from transformers import (
     AutoTokenizer, 
@@ -8,9 +10,12 @@ from transformers import (
     RagRetriever, 
     RagSequenceForGeneration
 )
-import logging, json, os, spacy
+import logging, json, spacy
 from datasets import load_dataset, Dataset
 from tqdm import tqdm
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Setup logging
 logging.basicConfig(
@@ -60,7 +65,15 @@ def load_and_preprocess_dataset(dataset_name="squad", split="train[:10%]"):
     return Dataset.from_dict(preprocessed_data)
 
 # Load JSON files and extract documents
-def load_json_files(json_files):
+def load_json_files(dataset_dir):
+    json_files = [
+        os.path.join(dataset_dir, os.getenv('DEP_MAPPING_FILE')),
+        os.path.join(dataset_dir, os.getenv('POS_MAPPING_FILE')),
+        os.path.join(dataset_dir, os.getenv('TEST_FILE')),
+        os.path.join(dataset_dir, os.getenv('TRAIN_FILE')),
+        os.path.join(dataset_dir, os.getenv('VAL_FILE'))
+    ]
+
     documents = []
     for file in json_files:
         if not os.path.exists(file):
@@ -88,32 +101,27 @@ def load_json_files(json_files):
     return documents
 
 # Define paths to your datasets
-dataset_dirs = ['data/lcquad2', 'data/qald9', 'data/vquanda']
+dataset_dirs = [
+    os.getenv('DATASET_DIR_1'), 
+    os.getenv('DATASET_DIR_2'), 
+    os.getenv('DATASET_DIR_3')
+]
 all_documents = []
 
 # Loop through each dataset and load all the documents
 for dataset_dir in dataset_dirs:
-    json_files = [
-        os.path.join(dataset_dir, 'dep_mapping.json'),
-        os.path.join(dataset_dir, 'pos_mapping.json'),
-        os.path.join(dataset_dir, 'test.json'),
-        os.path.join(dataset_dir, 'train.json'),
-        os.path.join(dataset_dir, 'val.json')
-    ]
-    
-    # Load documents from current dataset and add them to the master list
-    documents = load_json_files(json_files)
+    documents = load_json_files(dataset_dir)
     all_documents.extend(documents)
 
 print(f"Total documents loaded: {len(all_documents)}")
 
 # Load a pre-trained RAG model and tokenizer
-rag_tokenizer = RagTokenizer.from_pretrained("facebook/rag-sequence-nq")
-rag_model = RagSequenceForGeneration.from_pretrained("facebook/rag-sequence-nq")
+rag_tokenizer = RagTokenizer.from_pretrained(os.getenv('RAG_MODEL_NAME'))
+rag_model = RagSequenceForGeneration.from_pretrained(os.getenv('RAG_MODEL_NAME'))
 
 # Initialize the retriever with the combined documents
 retriever = RagRetriever.from_pretrained(
-    "facebook/rag-sequence-nq",
+    os.getenv('RAG_MODEL_NAME'),
     index_name="custom",
     passages=all_documents  
 )
@@ -123,15 +131,15 @@ retriever.save_pretrained("retriever")
 
 # Define training arguments
 training_args = Seq2SeqTrainingArguments(
-    output_dir="./results",
-    evaluation_strategy="epoch",
-    learning_rate=2e-5,
-    per_device_train_batch_size=2,
-    per_device_eval_batch_size=2,
-    weight_decay=0.01,
-    save_total_limit=3,
-    num_train_epochs=3,
-    predict_with_generate=True,
+    output_dir=os.getenv('OUTPUT_DIR'),
+    evaluation_strategy=os.getenv('EVAL_STRATEGY'),
+    learning_rate=float(os.getenv('LEARNING_RATE')),
+    per_device_train_batch_size=int(os.getenv('TRAIN_BATCH_SIZE')),
+    per_device_eval_batch_size=int(os.getenv('EVAL_BATCH_SIZE')),
+    weight_decay=float(os.getenv('WEIGHT_DECAY')),
+    save_total_limit=int(os.getenv('SAVE_TOTAL_LIMIT')),
+    num_train_epochs=int(os.getenv('NUM_TRAIN_EPOCHS')),
+    predict_with_generate=bool(os.getenv('PREDICT_WITH_GENERATE')),
 )
 
 # Load and preprocess the dataset
