@@ -1,4 +1,4 @@
-#!/home/o_stanczyk/SPARQL_LLM/thesis/bin/python3
+#!/mnt/newdisk/SPARQL_LLM/thesis/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
